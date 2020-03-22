@@ -1,0 +1,219 @@
+app-id: com.mysql.Workbench
+
+runtime: org.gnome.Platform
+runtime-version: '3.36'
+sdk: org.gnome.Sdk
+
+command: mysql-workbench
+
+finish-args:
+  # X11 + XShm access
+  - --share=ipc
+  - --socket=fallback-x11
+  # Wayland access
+  - --socket=wayland
+  # Python2
+  - --env=PYTHONPATH=/app/lib/python2.7/site-packages
+
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /share/pkgconfig
+  - /share/aclocal
+  - /man
+  - /share/man
+  - /share/gtk-doc
+  - /share/doc
+  - '*.la'
+  - '*.a'
+
+modules:
+  - gtkmm.yml
+  - shared-modules/python2.7/python-2.7.json
+
+  - name: swig
+    config-opts:
+      - --without-boost
+      - --without-pcre
+    sources:
+      - type: archive
+        url: http://prdownloads.sourceforge.net/swig/swig-3.0.7.tar.gz
+        sha256: 06dc8816a225667ce1eee545af3caf87e1bbaa379c32838d4cea53152514348d
+
+  # ANTLR + deps
+  - name: libantlr4
+    buildsystem: cmake
+    sources:
+      - type: archive
+        url: https://www.antlr.org/download/antlr4-cpp-runtime-4.8-source.zip
+        sha256: 58c9c8f83ed2b2224a047a2ca8af8c7ca2f45bc13ff30bd8777ce65ba81d6d11
+        strip-components: 0
+
+  - name: gmp
+    config-opts:
+      - --enable-cxx
+    sources:
+      - type: archive
+        url: https://gmplib.org/download/gmp/gmp-6.1.2.tar.xz
+        sha256: 87b565e89a9a684fe4ebeeddb8399dce2599f9c9049854ca8c0dfbdea0e21912
+
+  - name: antlr4
+    buildsystem: simple
+    build-commands:
+      - install -m 0644 -D antlr-4.8-complete.jar /app/share/java/antlr-4.8-complete.jar
+      - install -m 0755 -D antlr4 /app/bin/antlr4
+    sources:
+      - type: file
+        url: https://www.antlr.org/download/antlr-4.8-complete.jar
+        sha256: 73a49d6810d903aa4827ee32126937b85d3bebec0a8e679b0dd963cbcc49ba5a
+      - type: script
+        dest-filename: antlr4
+        commands:
+          - export CLASSPATH=/app/share/java/antlr-4.8-complete.jar:$CLASSPATH
+          - 'exec /usr/lib/sdk/openjdk11/jvm/openjdk-11/bin/java org.antlr.Tool "$@"'
+
+  # MariaDB + deps
+  - name: jemalloc
+    cleanup:
+      - /bin/
+      - /share
+    sources:
+      - type: archive
+        url: https://github.com/jemalloc/jemalloc/releases/download/5.2.1/jemalloc-5.2.1.tar.bz2
+        sha256: 34330e5ce276099e2e8950d9335db5a875689a4c6a56751ef3b1d8c537f887f6
+
+  - name: libaio
+    buildsystem: simple
+    build-options:
+      arch:
+        i386:
+          cflags: -march=x86-64 -mtune=generic -O2 -pipe -fno-stack-protector -fno-plt
+    build-commands:
+      - make
+      - make prefix=/app install
+    sources:
+      - type: archive
+        url: http://ftp.de.debian.org/debian/pool/main/liba/libaio/libaio_0.3.110.orig.tar.gz
+        sha256: e019028e631725729376250e32b473012f7cb68e1f7275bfc1bbcdd0f8745f7e
+
+  - name: mariadb
+    buildsystem: cmake
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DBUILD_CONFIG=mysql_release
+      - -DWITH_INNOBASE_STORAGE_ENGINE=1
+      - -DWITHOUT_ARCHIVE_STORAGE_ENGINE=1
+      - -DWITHOUT_BLACKHOLE_STORAGE_ENGINE=1
+      - -DWITHOUT_EXAMPLE_STORAGE_ENGINE=1
+      - -DWITHOUT_FEDERATED_STORAGE_ENGINE=1
+      - -DWITHOUT_PARTITION_STORAGE_ENGINE=1
+      - -DWITHOUT_PBXT_STORAGE_ENGINE=1
+      - -DWITHOUT_TOKUDB=1
+    cleanup:
+      - /bin/
+    sources:
+      - type: archive
+        url: http://ftp.hosteurope.de/mirror/archive.mariadb.org/mariadb-10.5.1/source/mariadb-10.5.1.tar.gz
+        sha256: 3a99d7a642098982049d8067b64b99cc993e16e97838ed9da97d1102574e1d85
+      - type: patch
+        path: mariadb-disable-pam.patch
+
+  # gdal + deps
+  - name: proj
+    sources:
+      - type: archive
+        url: https://github.com/OSGeo/PROJ/releases/download/6.3.1/proj-6.3.1.tar.gz
+        sha256: 6de0112778438dcae30fcc6942dee472ce31399b9e5a2b67e8642529868c86f8
+
+  - name: gdal
+    sources:
+      - type: archive
+        url: https://github.com/OSGeo/gdal/releases/download/v3.0.4/gdal-3.0.4.tar.gz
+        sha256: fc15d2b9107b250305a1e0bd8421dd9ec1ba7ac73421e4509267052995af5e83
+
+  # Boost
+  - name: boost
+    buildsystem: simple
+    build-commands:
+      - ./bootstrap.sh --prefix="${FLATPAK_DEST}"
+      - ./b2 -j ${FLATPAK_BUILDER_N_JOBS} headers
+      - cp -r boost "${FLATPAK_DEST}/include/boost"
+    sources:
+      - type: archive
+        url: https://dl.bintray.com/boostorg/release/1.72.0/source/boost_1_72_0.tar.bz2
+        sha256: 59c9b274bc451cf91a9ba1dd2c7fdcaf5d60b1b3aa83f2c9fa143417cc660722
+
+  # vsqlite++
+  - name: vsqlite
+    sources:
+      - type: archive
+        url: http://evilissimo.fedorapeople.org/releases/vsqlite--/0.3.13/vsqlite++-0.3.13.tar.gz
+        sha256: 67887fe7e27159fc83de271a015c322d40bb760f1a7ac5ae9c1d40291a90d39d
+
+  # rapidjson
+  - name: rapidjson
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DRAPIDJSON_BUILD_DOC=OFF
+      - -DRAPIDJSON_BUILD_EXAMPLES=OFF
+      - -DRAPIDJSON_BUILD_TESTS=OFF
+      - -DRAPIDJSON_BUILD_THIRDPARTY_GTEST=OFF
+    sources:
+      - type: archive
+        url: https://github.com/miloyip/rapidjson/archive/v1.1.0.tar.gz
+        sha256: bf7ced29704a1e696fbccf2a2b4ea068e7774fa37f6d7dd4039d0787f8bed98e
+
+  # libssh
+  - name: libssh
+    buildsystem: cmake-ninja
+    builddir: true
+    sources:
+      - type: archive
+        url: https://www.libssh.org/files/0.8/libssh-0.8.8.tar.xz
+        sha256: 4b127fd736ac4df109ae7368f44201a2d0b989e0c89132dd92290593535d65e2
+
+  # iodbc
+  - name: iodbc
+    buildsystem: autotools
+    config-opts:
+      - --with-layout=GNU
+    sources:
+      - type: archive
+        url: https://github.com/openlink/iODBC/archive/v3.52.13.tar.gz
+        sha256: 4bf67fc6d4d237a4db19b292b5dd255ee09a0b2daa4e4058cf3a918bc5102135
+
+  # MySQL C++ connector
+  - name: protobuf
+    # config-opts:
+      # - -Dprotobuf_BUILD_TESTS=OFF
+      # - -Dprotobuf_BUILD_PROTOC_BINARIES=OFF
+    cleanup:
+      - protoc
+      - /bin
+      - /doc
+      - /lib/plugins
+    sources:
+      - type: archive
+        url: https://github.com/google/protobuf/releases/download/v3.11.4/protobuf-all-3.11.4.tar.gz
+        sha256: 95a5af2fbddfaad6ef8f606eb8053ccf2f481174bd54c26373a8c49b328485a4
+
+  - name: mysql-cpp-connector
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DWITH_JDBC=ON
+    sources:
+      - type: archive
+        url: https://dev.mysql.com/get/Downloads/Connector-C++/mysql-connector-c++-8.0.19-src.tar.gz
+        sha256: 7c3bd74ce64a9300e7d481b76b388ad95017a52480c698b755579aec62d4a21e
+
+  # MySQL workbench
+  - name: mysql-workbench
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DOpenGL_GL_PREFERENCE=GLVND
+      - -DMySQL_CONFIG_PATH=/app/bin/mysql_config
+    sources:
+      - type: git
+        url: https://github.com/mysql/mysql-workbench.git
+        branch: '8.0'
