@@ -1,0 +1,54 @@
+app-id: be.belgium.eid.EidViewer
+
+runtime: org.gnome.Platform
+runtime-version: '3.36'
+sdk: org.gnome.Sdk
+
+command: eid-viewer
+
+# Probably this should just be renamed upstream
+rename-desktop-file: eid-viewer.desktop
+rename-appdata-file: eid-viewer.appdata.xml
+rename-icon: eid-viewer
+
+finish-args:
+  # X11 access
+  - --socket=x11
+  # Wayland access
+  - --socket=wayland
+  # PCSC
+  - --socket=pcsc
+
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /share/pkgconfig
+  - /share/aclocal
+  - /man
+  - /share/man
+  - /share/gtk-doc
+  - '*.la'
+  - '*.a'
+
+modules:
+  # dependencies
+  - name: pcsc-lite
+    buildsystem: autotools
+    config-opts:
+      - --disable-libsystemd
+      - --disable-libusb
+      - --disable-libudev
+      - --disable-documentation
+      - --without-systemdsystemunitdir
+    sources:
+      - type: archive
+        url: https://pcsclite.apdu.fr/files/pcsc-lite-1.8.25.tar.bz2
+        sha256: d76d79edc31cf76e782b9f697420d3defbcc91778c3c650658086a1b748e8792
+
+  # eid-viewer
+  - name: eid-viewer
+    buildsystem: autotools
+    sources:
+      - type: archive
+        url: https://dist.eid.belgium.be/continuous/sources/eid-mw-4.4.21-v4.4.21.tar.gz
+        sha256: 7a76fd8ddf48b68f29747b660a3af48ff483d2cea8b3b362ac171dafad8cf99b
